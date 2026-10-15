@@ -1,0 +1,72 @@
+# -*- coding: utf-8 -*-
+"""
+Nightly deemed-approval job.
+
+Under the Purvanchal Right to Public Services Act, an application not processed
+within the statutory SLA stands approved. This job marks such applications
+DEEMED_APPROVED and notifies the applicant by SMS.
+
+Scheduled via cron, 02:00 daily. See deploy/crontab.
+"""
+
+import os
+import sys
+import configparser
+from datetime import datetime, timedelta
+
+import psycopg2
+import requests
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+config = configparser.ConfigParser()
+CONFIG_PATH = os.path.join(BASE_DIR, "config", "app.ini")
+with open(CONFIG_PATH) as fh:
+    config.read_file(fh)
+
+SLA_DAYS = config.getint("pension", "sla_days")
+SMS_GATEWAY_URL = os.environ.get("SMS_GATEWAY_URL") or config.get("app", "sms_gateway_url")
+
+
+def main():
+    conn = psycopg2.connect(
+        host=os.environ.get("DB_HOST") or config.get("database", "host"),
+        port=os.environ.get("DB_PORT") or config.get("database", "port"),
+        dbname=os.environ.get("DB_NAME") or config.get("database", "name"),
+        user=os.environ.get("DB_USER") or config.get("database", "user"),
+        password=os.environ.get("DB_PASSWORD") or config.get("database", "password"),
+    )
+    cur = conn.cursor()
+    cutoff = datetime.now() - timedelta(days=SLA_DAYS)
+    cur.execute(
+        """UPDATE applications
+           SET status = 'DEEMED_APPROVED', decided_at = %s, decided_by = 'RTPS-AUTO'
+           WHERE status = 'PENDING' AND submitted_at < %s
+             AND dob <= (submitted_at::date - interval '60 years')::date
+           RETURNING application_no, mobile""",
+        (datetime.now(), cutoff))
+    rows = cur.fetchall()
+    cur.execute("SELECT id FROM applications WHERE status = 'DEEMED_APPROVED' "
+                "AND decided_by = 'RTPS-AUTO' AND decided_at >= %s",
+                (datetime.now() - timedelta(minutes=1),))
+    for (app_id,) in cur.fetchall():
+        cur.execute("INSERT INTO audit_log (application_id, action, actor, note, at) "
+                    "VALUES (%s, 'DEEMED_APPROVED', 'system:rtps-cron', "
+                    "'not processed within SLA', %s)", (app_id, datetime.now()))
+    conn.commit()
+    for app_no, mobile in rows:
+        try:
+            requests.post(SMS_GATEWAY_URL + "/api/send", json={
+                "to": mobile,
+                "text": "Sewa Setu: your pension application %s stands approved "
+                        "under the RTPS Act." % app_no}, timeout=5)
+        except Exception:
+            pass
+    print("%s deemed approval: %d applications approved"
+          % (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), len(rows)))
+    cur.close()
+    conn.close()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,19 @@
+[
+ {"found": "The nightly deemed-approval job approves any application older than 15 days, with no eligibility check. The seed data shows the same gap already happened: 637 applicants under 60 today hold APPROVED or DEEMED_APPROVED status and 9 under-60 applications are still pending. I ran the original job's SQL on a 20-day-old under-60 fixture: it became DEEMED_APPROVED.",
+  "changed": "The job now leaves applications from people who were under 60 at submission PENDING. They stay in the officer queue flagged AGE_BELOW_60_AT_SUBMISSION; the officer assistant can reject them but cannot approve them. Test: persona 'rtps_job'.",
+  "where": "app/scripts/deemed_approval.py, agents/officer_server.py"},
+ {"found": "The web form accepted a blank gender or marital status (validate_application never checked them). Anything an assistant sent could have done the same.",
+  "changed": "validate_application now requires the form's own option lists. Both channels share it.",
+  "where": "app/app.py"},
+ {"found": "Access tokens live 20-30 minutes. After a citizen signs out (kiosk), the token would keep working until it expires.",
+  "changed": "Both MCP servers check that the sign-in behind a token is still open, so end_session, the status portal's Connected applications page and the admin sign-out take effect on the next call. Test: persona 'bimala' (old token -> 401 immediately).",
+  "where": "agents/common.py"},
+ {"found": "An assistant could read a summary to the citizen, then change a field and still submit on the earlier yes.",
+  "changed": "review_draft returns a hash of exactly what was read back; submit_application only accepts that hash plus an explicit declaration. Test: persona 'gopal'.",
+  "where": "agents/citizen_server.py"},
+ {"found": "Applicant-typed text (name, village) flows into the officer's assistant, so a citizen can plant instructions there.",
+  "changed": "Markup/newlines are refused at the citizen side; officer tools label applicant text as untrusted data; decide needs the officer's explicit instruction and a reason, and is never available for bulk. Test: persona 'injector'.",
+  "where": "agents/citizen_server.py, agents/officer_server.py"},
+ {"found": "My first run of the harness failed two checks: the portal's SMS gateway delivers 1-4 seconds after sending, so 'SMS received' was checked too early. The harness now polls. Assistants that read an OTP from the user must expect the same delay.",
+  "changed": "Eval harness only.", "where": "evals/run_evals.py"}
+]
