@@ -34,6 +34,7 @@ code,pre{background:#f3f3f3;font-size:12px;white-space:pre-wrap;word-break:break
     h.append("<h1>Sewa Setu assistant: evals</h1>")
     h.append("<p><b>%d of %d checks passed</b> across <b>%d invented people</b> (%d fully passing). Run %s against <code>%s</code>.</p>" %
              (ok, tot, len(res), sum(r["passed"] for r in res), E_(run["at"]), E_(run["base"])))
+    h.append("<p><small>The harness needs direct database access for its setup and checks, which a hosted free instance does not expose. So the full run was made against a from-scratch boot of this same build (same Docker image, same seed). The hosted instance was smoke-tested separately over the public URL: OAuth sign-in and the citizen MCP tool list work.</small></p>")
     h.append("<p><small>How this was run: each person is played by a script that calls the real citizen or officer MCP endpoint over streamable HTTP "
              "after a real OAuth 2.1 sign-in (discovery, dynamic registration, PKCE, OTP or officer login, consent). Afterwards the harness reads the "
              "portal database and the portal's own web pages. There is no language model in this loop: it tests what the servers enforce, "
